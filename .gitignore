@@ -1,0 +1,9 @@
+.DS_Store
+*.pdf
+*.html
+*.npy
+*.npz
+*.png
+*.pyc
+nndl2/
+__pycache__/
