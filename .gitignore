@@ -7,3 +7,5 @@
 *.pyc
 nndl2/
 __pycache__/
+data/
+pics/
