@@ -149,7 +149,8 @@ class ConditionalUnet(nn.Module):
             c: input conditions (one-hot encoded labels), with size (B,10)
         '''
         t, c = t.float(), c.float()
-
+        #print(t.shape, c.shape)
+        
         # time step embedding
         temb1 = self.timeembed1(t).view(-1, self.n_feat * 2, 1, 1)
         temb2 = self.timeembed2(t).view(-1, self.n_feat, 1, 1) 
