@@ -3,8 +3,8 @@ This repository contains my solutions to the HW's and projects for EC ENGR 239AS
 
 | Assignment | Topic | Score | 
 | :-: | :-: | :-: |
-| Project 1 | GAN's and VAE's| |
-| Project 2 | Diffusion | |
+| Project 1 | GAN's and VAE's| 25/25 |
+| Project 2 | Diffusion and DDPM | |
 | Project 3 | | |
 | Project 4 | | |
 
