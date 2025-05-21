@@ -104,15 +104,15 @@ class BigramLanguageModel(nn.Module):
         """
 
         ### ========= TODO : START ========= ###
-
-        context = context.unsqueeze(0)
+        device = "cuda:0"
         with torch.no_grad():
             for _ in range(max_new_tokens):
-                logits = self.forward(context)
-                probs = nn.functional.softmax(logits, dim=-1)
-                next_tok = torch.multinomial(probs, 1).item()
-                context.append(next_tok)
-            return context
+                context_tensor = torch.tensor(context[-1], dtype=torch.long).unsqueeze(0)
+                logits = self.forward(context_tensor)
+                probs = torch.softmax(logits, dim=-1)
+                next_tok = torch.multinomial(probs, num_samples=1).item()
+                context = torch.cat([context, torch.tensor([next_tok], device=device)])
+        return context
 
         ### ========= TODO : END ========= ###
 
@@ -482,6 +482,9 @@ class MiniGPT(nn.Module):
         # prehead layer norm
         self.prehead_norm = LayerNorm(config.embed_dim)
 
+        #context legnth
+        self.context_length = config.context_length
+
         self.head = nn.Linear(
             config.embed_dim, config.vocab_size
         )  # Language modelling head
@@ -515,7 +518,19 @@ class MiniGPT(nn.Module):
 
         ### ========= TODO : START ========= ###
 
-        raise NotImplementedError
+        token_embd = self.vocab_embedding(x)
+        _, seq_len = x.shape
+        positional_embd = self.positional_embedding(self.pos[:seq_len])
+        embd = token_embd + positional_embd
+        dropp = self.embed_dropout(embd)
+
+        for layer in self.transformer_layers:
+            dropp = layer(dropp)
+        
+        norm = self.prehead_norm(dropp)
+        logits = self.head(norm)
+
+        return logits
 
         ### ========= TODO : END ========= ###
 
@@ -554,6 +569,20 @@ class MiniGPT(nn.Module):
 
         ### ========= TODO : START ========= ###
 
-        raise NotImplementedError
+        device = "cuda:0"
+        generated_context = context
+        with torch.no_grad():
+            for _ in range(max_new_tokens):
+                context_tensor = torch.tensor(context, dtype=torch.long).unsqueeze(0)
+                logits = self.forward(context_tensor)
+                probs = torch.softmax(logits.squeeze(0), dim=-1)
+                next_tok = torch.multinomial(probs[-1], num_samples=1).item()
+                generated_context = torch.cat([generated_context, torch.tensor([next_tok], device=device)])
+                #context length
+                if len(context) >= self.context_length:
+                    context = torch.cat([context[1:], torch.tensor([next_tok], device=device)])
+                else:
+                    context = torch.cat([context, torch.tensor([next_tok], device=device)])
+        return generated_context
 
         ### ========= TODO : END ========= ###

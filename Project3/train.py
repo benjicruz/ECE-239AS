@@ -10,6 +10,7 @@ import torch.nn.utils
 from torch.utils.data import DataLoader
 from einops import rearrange
 import wandb
+from tqdm import tqdm
 
 from model import BigramLanguageModel, MiniGPT
 from dataset import TinyStoriesDataset
@@ -43,6 +44,9 @@ def solver(model_name):
     eval_dataloader = DataLoader(
         eval_dataset, batch_size=config.batch_size, pin_memory=True
     )
+    # print the size of each dataloader
+    print(f"Train dataloader size: {len(train_dataloader)}")
+    print(f"Eval dataloader size: {len(eval_dataloader)}")
 
     # Set the device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -83,9 +87,10 @@ def solver(model_name):
     ### ========= TODO : START ========= ###
     # Define the loss function
     loss = nn.CrossEntropyLoss()
+    
 
     # Define the optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.learning_rate)
     ### ======== TODO : END ========= ###
 
     if config.scheduler:
@@ -95,20 +100,23 @@ def solver(model_name):
 
     model.train()
     model.to(device)
-    total_loss = 0.0
+
     for i, (context, target) in enumerate(train_dataloader):
 
         train_loss = None # You can use this variable to store the training loss for the current iteration
         ### ======== TODO : START ========= ###
         # Do the forward pass, compute the loss, do the backward pass, and update the weights with the optimizer.
+        context, target = context.to(device), target.to(device)
+        logits = model(context)
+        
+        logits = rearrange(logits, "b t v -> (b t) v")
+        target = rearrange(target, "b t -> (b t)")
+        
+        train_loss = loss(logits, target)
+        
         optimizer.zero_grad()
-        outputs = model(context)
-        loss_ = loss(outputs.view(-1, config.vocab_size), target.view(-1))
-        loss_.backwards()
+        train_loss.backward()
         optimizer.step()
-        
-        
-        
         
         ### ======== TODO : END ========= ###
 
@@ -118,29 +126,56 @@ def solver(model_name):
         del context, target # Clear memory
 
         if i % config.log_interval == 0:
-
-            model.eval()
-            eval_loss = None # You can use this variable to store the evaluation loss for the current iteration
-            ### ======== TODO : START ========= ###
-            # Compute the evaluation loss on the eval dataset.
-            
-            
-            
-            
-            ### ======== TODO : END ========= ###
-            
             print(
                 f"Iteration {i}, Train Loss: {train_loss}",
-                f"Eval Loss: {eval_loss}",
             )
 
             if config.to_log:
                 wandb.log(
                     {
-                        "Train Loss": train_loss,
-                        "Eval Loss": eval_loss,
-                    }
+                        "Train Loss": train_loss
+                    },
+                    step=i
                 )
+            
+        if i % config.eval_log_interval == 0:
+            model.eval()
+            eval_loss = None # You can use this variable to store the evaluation loss for the current iteration
+            ### ======== TODO : START ========= ###
+            # Compute the evaluation loss on the eval dataset.
+            
+            total_eval_loss = 0
+            num_batches = 0
+            for j, (eval_context, eval_target) in enumerate(tqdm(eval_dataloader, total=len(eval_dataloader)//20, desc="Evaluating")):
+                eval_context, eval_target = eval_context.to(device), eval_target.to(device)
+                eval_logits = model(eval_context)
+
+                eval_logits = eval_logits.view(-1, eval_logits.size(-1))
+                eval_target = eval_target.view(-1)
+
+                loss_value = loss(eval_logits, eval_target)
+                total_eval_loss += loss_value.item()
+                num_batches += 1
+                # only use 1/10 of the eval length and the break out of the loop
+                if j > len(eval_dataloader) // 20:
+                    break
+                
+            eval_loss = total_eval_loss / num_batches
+            
+            print(
+                f"\033[94mIteration {i}, Eval Loss: {eval_loss}\033[0m",
+            )
+            if config.to_log:
+                wandb.log(
+                    {
+                        "Eval Loss": eval_loss,
+                    },
+                    step=i
+                )
+            
+            ### ======== TODO : END ========= ###
+            
+
 
             model.train()
 
@@ -159,3 +194,18 @@ def solver(model_name):
 
         if i > config.max_iter:
             break
+        # if the loss is sufficiently low, break out of the loop
+        if train_loss < 3.0 and eval_loss < 3.5:
+            print("Loss is sufficiently low, stopping training.")
+            torch.save(
+                {
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "train_loss": train_loss,
+                    "eval_loss": eval_loss,
+                    "iteration": i,
+                },
+                config.save_path / f"mini_model_sufficient_loss_checkpoint_{i}.pt",
+            )
+            break
+                
