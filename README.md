@@ -5,6 +5,6 @@ This repository contains my solutions to the HW's and projects for EC ENGR 239AS
 | :-: | :-: | :-: |
 | Project 1 | GAN's and VAE's| 25/25 |
 | Project 2 | Diffusion and DDPM | 50/50 |
-| Project 3 | Transformers and Attention | |
-| Project 4 | | |
+| Project 3 | Transformers and Attention | 100/100 |
+| Project 4 | DQN | |
 
